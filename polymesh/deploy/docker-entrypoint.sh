@@ -17,6 +17,8 @@ then
   echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $NETWORK_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
 fi
 
+export START_BLOCK=${START_BLOCK:-1}
+
 envsubst < project.template.yaml > project.yaml # Substitute environment variables in project.template.yaml
 
 # Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM

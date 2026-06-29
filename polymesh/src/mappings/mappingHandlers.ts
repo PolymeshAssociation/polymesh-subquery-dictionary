@@ -1,6 +1,5 @@
-import { EventRecord } from "@polkadot/types/interfaces";
-import { SubstrateExtrinsic, SubstrateBlock } from "@subql/types";
-import { SpecVersion, Event, Extrinsic } from "../types";
+import { SubstrateBlock, SubstrateExtrinsic } from "@subql/types";
+import { Event, Extrinsic, SpecVersion } from "../types";
 
 let specVersion: SpecVersion;
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
@@ -11,7 +10,7 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
 
   // Check for updates to Spec Version
   if (!specVersion || specVersion.id !== block.specVersion.toString()) {
-    specVersion = new SpecVersion(block.specVersion.toString(),block.block.header.number.toBigInt());
+    specVersion = new SpecVersion(block.specVersion.toString(), block.block.header.number.toBigInt());
     await specVersion.save();
   }
 
@@ -20,7 +19,7 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     .filter(
       (evt) =>
         !(evt.event.section === "system" &&
-        evt.event.method === "ExtrinsicSuccess")
+          evt.event.method === "ExtrinsicSuccess")
     )
     .map((evt, idx) =>
       handleEvent(block.block.header.number.toString(), idx, evt)
@@ -41,21 +40,21 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
 function handleEvent(
   blockNumber: string,
   eventIdx: number,
-  event: EventRecord
+  event: SubstrateBlock["events"][number]
 ): Event {
-  const newEvent = new Event(`${blockNumber}-${eventIdx}`,event.event.section,event.event.method,BigInt(blockNumber));
+  const newEvent = new Event(`${blockNumber}-${eventIdx}`, event.event.section, event.event.method, BigInt(blockNumber));
   return newEvent;
 }
 
 function handleCall(idx: string, extrinsic: SubstrateExtrinsic): Extrinsic {
   const newExtrinsic = new Extrinsic(
-      idx,
-      extrinsic.extrinsic.hash.toString(),
-      extrinsic.extrinsic.method.section,
-      extrinsic.extrinsic.method.method,
-      extrinsic.block.block.header.number.toBigInt(),
-      extrinsic.success,
-      extrinsic.extrinsic.isSigned
+    idx,
+    extrinsic.extrinsic.hash.toString(),
+    extrinsic.extrinsic.method.section,
+    extrinsic.extrinsic.method.method,
+    extrinsic.block.block.header.number.toBigInt(),
+    extrinsic.success,
+    extrinsic.extrinsic.isSigned
   );
   return newExtrinsic;
 }

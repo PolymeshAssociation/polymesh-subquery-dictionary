@@ -2,7 +2,7 @@ version: '3'
 
 services:
   postgres:
-    image: postgres:12-alpine
+    image: postgres:16-alpine
     ports:
       - 5432:5432
     volumes:
@@ -11,7 +11,9 @@ services:
       POSTGRES_PASSWORD: postgres
 
   subquery-node:
-    image: onfinality/subql-node:latest
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
     depends_on:
       - 'postgres'
     restart: always
@@ -23,8 +25,7 @@ services:
       DB_PORT: 5432
       NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
       NETWORK_CHAIN_ID: '0x2ace05e703aa50b48c0ccccfc8b424f7aab9a1e2c424ed12e45d20b1e8ffd0d6'
-    volumes:
-      - ./:/app
+      START_BLOCK: 1
     command:
       - -f=/app
       - --db-schema=public
