@@ -10,3 +10,4 @@ docker run --rm \
            -it \
            --env-file ./deploy/.env.template \
            "${CONTAINER_REGISTRY}/polymesh/subquery-dictionary:${CONTAINER_TAG}"
+           

@@ -1,7 +1,5 @@
-FROM node:21.5.0-alpine3.19 AS builder
-RUN apk add --no-cache bash gettext
-
-# arm64 dependencies
+FROM node:lts-alpine3.17 AS builder
+# Build dependencies
 RUN apk add --no-cache \
   bash \
   gettext \
