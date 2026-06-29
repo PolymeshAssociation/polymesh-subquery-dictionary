@@ -21,7 +21,7 @@ export START_BLOCK=${START_BLOCK:-1}
 
 envsubst < project.template.yaml > project.yaml # Substitute environment variables in project.template.yaml
 
-# Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
+# Allow configuring node memory. Default to 1.5GB, should be ~75% of available RAM
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}
 
 node --max-old-space-size=$NODE_SPACE /bin/run "$@" &
