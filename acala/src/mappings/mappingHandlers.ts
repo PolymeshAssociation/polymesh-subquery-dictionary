@@ -2,22 +2,16 @@ import { EventRecord } from "@polkadot/types/interfaces";
 import { SubstrateExtrinsic, SubstrateBlock, SubstrateEvent } from "@subql/types";
 import { SpecVersion, Event, Extrinsic, EvmLog, EvmTransaction } from "../types";
 import acalaProcessor from '@subql/acala-evm-processor';
-import {hexDataSlice, stripZeros} from '@ethersproject/bytes';
+import { hexDataSlice, stripZeros } from '@ethersproject/bytes';
 import { merge } from 'lodash';
 
-let specVersion: SpecVersion;
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   // Initialise Spec Version
-  if (!specVersion) {
-    specVersion = await SpecVersion.get(block.specVersion.toString());
-  }
+  let specVersion = await SpecVersion.get(block.specVersion.toString());
 
   // Check for updates to Spec Version
-  if (!specVersion || specVersion.id !== block.specVersion.toString()) {
-    specVersion = SpecVersion.create({
-      id: block.specVersion.toString(),
-      blockHeight: block.block.header.number.toBigInt(),
-    });
+  if (!specVersion) {
+    specVersion = new SpecVersion(block.specVersion.toString(), block.block.header.number.toBigInt());
     await specVersion.save();
   }
 
@@ -29,41 +23,52 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     .filter(
       (evt) =>
         !(evt.event.section === "system" &&
-        evt.event.method === "ExtrinsicSuccess")
+          evt.event.method === "ExtrinsicSuccess")
     )
     .map((evt, idx) =>
       handleEvent(block.block.header.number.toString(), idx, evt)
     );
 
-  const evmLogs = await Promise.all(
-    wrappedEvents
-      .filter(evt => {
-        const baseFilter = acalaProcessor.handlerProcessors['substrate/AcalaEvmEvent'].baseFilter[0];
-        return evt.event.section === baseFilter.module && evt.event.method === baseFilter.method;
-      })
-      .map(evt => handleEvmLog(block.block.header.number.toString(), evt))
-  );
+  const baseEventFilter = acalaProcessor.handlerProcessors['substrate/AcalaEvmEvent'].baseFilter[0];
+  const evmLogs: EvmLog[][] = []
+  for (const evt of wrappedEvents.filter(evt => {
+
+    return evt.event.section === baseEventFilter.module && evt.event.method === baseEventFilter.method;
+  })) {
+    const logResult = await handleEvmLog(block.block.header.number.toString(), evt);
+    evmLogs.push(logResult);
+  }
 
   // Process all calls in block
-  const calls = wrappedExtrinsics.map((ext, idx) =>
-    handleCall(`${block.block.header.number.toString()}-${idx}`, ext)
-  );
+  const evmTransactions: EvmTransaction[][] = [];
+  const calls: Extrinsic[] = [];
+  const baseCallFilter = acalaProcessor.handlerProcessors['substrate/AcalaEvmCall'].baseFilter[0];
 
-  const evmTransactions = await Promise.all(wrappedExtrinsics
-    .filter(ex => {
-      const baseFilter = acalaProcessor.handlerProcessors['substrate/AcalaEvmCall'].baseFilter[0];
-      return ex.extrinsic.method.section === baseFilter.module && ex.extrinsic.method.method === baseFilter.method && ex.success;
-    })
-    .map(ex => handleEvmTransaction(ex.idx, ex))
-  );
+  for (let i = 0; i < wrapExtrinsics.length; i++/*const ex of wrappedExtrinsics*/) {
+    const ex = wrapExtrinsics[i]
+
+    if (ex.extrinsic.method.section === baseCallFilter.module && ex.extrinsic.method.method === baseCallFilter.method && ex.success) {
+      const transactionResult = await handleEvmTransaction(ex.idx, ex);
+      evmTransactions.push(transactionResult);
+    }
+    calls.push(handleCall(`${block.block.header.number.toString()}-${i}`, ex))
+  }
 
   // Save all data
-  await Promise.all([
-    store.bulkCreate("Event", events),
-    store.bulkCreate("Extrinsic", calls),
-    store.bulkCreate("EvmLog", evmLogs.flat()),
-    store.bulkCreate("EvmTransaction", evmTransactions.flat()),
-  ]);
+  // All save order should always follow this structure
+  for (const event of events) {
+    await event.save()
+  }
+  for (const call of calls) {
+    await call.save()
+  }
+
+  for (const evmLog of evmLogs.flat()) {
+    await evmLog.save()
+  }
+  for (const evmTransaction of evmTransactions.flat()) {
+    await evmTransaction.save()
+  }
 }
 
 function handleEvent(
@@ -92,10 +97,15 @@ function handleCall(idx: string, extrinsic: SubstrateExtrinsic): Extrinsic {
 }
 
 function wrapExtrinsics(wrappedBlock: SubstrateBlock): SubstrateExtrinsic[] {
+  const groupedEvents = wrappedBlock.events.reduce((acc, evt) => {
+    if (evt.phase.isApplyExtrinsic) {
+      acc[evt.phase.asApplyExtrinsic.toNumber()] ??= [];
+      acc[evt.phase.asApplyExtrinsic.toNumber()].push(evt);
+    }
+    return acc;
+  }, {} as Record<number, EventRecord[]>)
   return wrappedBlock.block.extrinsics.map((extrinsic, idx) => {
-    const events = wrappedBlock.events.filter(
-      ({ phase }) => phase.isApplyExtrinsic && phase.asApplyExtrinsic.eqn(idx)
-    );
+    const events = groupedEvents[idx];
     return {
       idx,
       extrinsic,
@@ -119,9 +129,7 @@ function wrapEvents(events: EventRecord[], block: SubstrateBlock, extrinsics: Su
   }, [] as SubstrateEvent[]);
 }
 
-
 async function handleEvmLog(blockNumber: string, event: SubstrateEvent): Promise<EvmLog[]> {
-
   const evmLogs = await acalaProcessor.handlerProcessors['substrate/AcalaEvmEvent'].transformer({
     input: event,
     ds: {} as any,
@@ -158,10 +166,10 @@ async function handleEvmTransaction(idx: number, tx: SubstrateExtrinsic): Promis
 }
 
 export function inputToFunctionSighash(input: string): string {
-    return hexDataSlice(input, 0, 4);
+  return hexDataSlice(input, 0, 4);
 }
 
 export function isZero(input: string): boolean {
-    return stripZeros(input).length === 0;
+  return stripZeros(input).length === 0;
 }
 

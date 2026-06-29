@@ -2,18 +2,15 @@ import { EventRecord } from "@polkadot/types/interfaces";
 import { SubstrateExtrinsic, SubstrateBlock } from "@subql/types";
 import { SpecVersion, Event, Extrinsic } from "../types";
 
-let specVersion: SpecVersion;
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   // Initialise Spec Version
-  if (!specVersion) {
-    specVersion = await SpecVersion.get(block.specVersion.toString());
-  }
+  let specVersion = await SpecVersion.get(block.specVersion.toString());
 
   // Check for updates to Spec Version
-  if (!specVersion || specVersion.id !== block.specVersion.toString()) {
+  if (!specVersion) {
     specVersion = SpecVersion.create({
       id: block.specVersion.toString(),
-      blockHeight: block.block.header.number.toBigInt()
+      blockHeight: block.block.header.number.toBigInt(),
     });
     await specVersion.save();
   }
@@ -23,7 +20,7 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     .filter(
       (evt) =>
         !(evt.event.section === "system" &&
-        evt.event.method === "ExtrinsicSuccess")
+          evt.event.method === "ExtrinsicSuccess")
     )
     .map((evt, idx) =>
       handleEvent(block.block.header.number.toString(), idx, evt)
@@ -51,29 +48,34 @@ function handleEvent(
 ): Event {
   return Event.create({
     id: `${blockNumber}-${eventIdx}`,
-    blockHeight : BigInt(blockNumber),
-    module : event.event.section,
-    event : event.event.method,
+    blockHeight: BigInt(blockNumber),
+    module: event.event.section,
+    event: event.event.method,
   });
 }
 
 function handleCall(idx: string, extrinsic: SubstrateExtrinsic): Extrinsic {
   return Extrinsic.create({
     id: idx,
-    txHash : extrinsic.extrinsic.hash.toString(),
-    module : extrinsic.extrinsic.method.section,
-    call : extrinsic.extrinsic.method.method,
-    blockHeight : extrinsic.block.block.header.number.toBigInt(),
-    success : extrinsic.success,
-    isSigned : extrinsic.extrinsic.isSigned,
+    txHash: extrinsic.extrinsic.hash.toString(),
+    module: extrinsic.extrinsic.method.section,
+    call: extrinsic.extrinsic.method.method,
+    blockHeight: extrinsic.block.block.header.number.toBigInt(),
+    success: extrinsic.success,
+    isSigned: extrinsic.extrinsic.isSigned,
   });
 }
 
 function wrapExtrinsics(wrappedBlock: SubstrateBlock): SubstrateExtrinsic[] {
+  const groupedEvents = wrappedBlock.events.reduce((acc, evt) => {
+    if (evt.phase.isApplyExtrinsic) {
+      acc[evt.phase.asApplyExtrinsic.toNumber()] ??= [];
+      acc[evt.phase.asApplyExtrinsic.toNumber()].push(evt);
+    }
+    return acc;
+  }, {} as Record<number, EventRecord[]>)
   return wrappedBlock.block.extrinsics.map((extrinsic, idx) => {
-    const events = wrappedBlock.events.filter(
-      ({ phase }) => phase.isApplyExtrinsic && phase.asApplyExtrinsic.eqn(idx)
-    );
+    const events = groupedEvents[idx];
     return {
       idx,
       extrinsic,
