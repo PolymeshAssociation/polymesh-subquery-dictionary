@@ -20,16 +20,18 @@
   "author": "Polymesh Association",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@polkadot/api": "^10",
-    "@polymeshassociation/polymesh-types": "^5.6.0",
+    "@polkadot/api": "^16.5.2",
+    "@polymeshassociation/polymesh-types": "^7.4.0",
     "@subql/cli": "latest",
+    "@subql/node": "^6.4.6",
     "@subql/types": "latest",
-    "typescript": "^4.1.3"
+    "typescript": "^4.9.5"
   },
   "resolutions": {
     "ipfs-unixfs": "6.0.6"
   },
   "exports": {
     "chainTypes": "./src/chainTypes/index.ts"
-  }
+  },
+  "packageManager": "yarn@4.12.0+sha512.f45ab632439a67f8bc759bf32ead036a1f413287b9042726b7cc4818b7b49e14e9423ba49b18f9e06ea4941c1ad062385b1d8760a8d5091a1a31e5f6219afca8"
 }
