@@ -1,17 +1,34 @@
 import { SubstrateBlock, SubstrateExtrinsic } from "@subql/types";
 import { Event, Extrinsic, SpecVersion } from "../types";
 
-let specVersion: SpecVersion;
+// Spec versions are read from the chain, not from `block.specVersion`: the node labels a whole
+// batch with one spec, so a label can lag an upgrade by up to a batch.
+const specAt = async (hash: SubstrateBlock["block"]["header"]["hash"]): Promise<string> =>
+  (await api.rpc.state.getRuntimeVersion(hash)).specVersion.toString();
+
+let specRecorded = false;
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
-  // Initialise Spec Version
-  if (!specVersion) {
-    specVersion = await SpecVersion.get(block.specVersion.toString());
+  const { hash, parentHash, number } = block.block.header;
+  const height = number.toBigInt();
+
+  // The first block this process sees: its spec is the one its parent's state holds
+  if (!specRecorded) {
+    const current = await specAt(parentHash);
+    if (!(await SpecVersion.get(current))) {
+      await new SpecVersion(current, height).save();
+    }
+    specRecorded = true;
   }
 
-  // Check for updates to Spec Version
-  if (!specVersion || specVersion.id !== block.specVersion.toString()) {
-    specVersion = new SpecVersion(block.specVersion.toString(), block.block.header.number.toBigInt());
-    await specVersion.save();
+  // An upgrade stored in this block runs from the next one, and this block's state holds it
+  const upgraded = block.events.some(
+    ({ event }) => event.section === "system" && event.method === "CodeUpdated"
+  );
+  if (upgraded) {
+    const [ran, next] = await Promise.all([specAt(parentHash), specAt(hash)]);
+    if (next !== ran) {
+      await new SpecVersion(next, height + BigInt(1)).save();
+    }
   }
 
   // Process all events in block
